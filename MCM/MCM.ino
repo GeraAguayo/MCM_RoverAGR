@@ -4,209 +4,149 @@ Rover AGR
 Gerardo Aguayo, 2025
 */
 #include <SoftwareSerial.h>
+#include <Servo.h>
+#include "Motors.h"
 
-//DRV8871 Config
-#define MOTOR_1_IN1 13
-#define MOTOR_1_IN2 12
-
-#define MOTOR_2_IN1 8
-#define MOTOR_2_IN2 9
-
-#define MOTOR_3_IN1 11
-#define MOTOR_3_IN2 10
-
-#define MOTOR_4_IN1 7
-#define MOTOR_4_IN2 6
-
-//HC12 Config
-const uint32_t HC12_BAUD = 2400;
-#define HC12_RX 18
-#define HC12_TX 19
-SoftwareSerial HC12(HC12_TX, HC12_RX);
-
-/*
-ENGINE MAPS
-Will dictate how much power si set to the motors
-*/
+//Motor maps
 #define MAP_1 70
 #define MAP_2 80
 #define MAP_3 100
 #define MAP_4 150
 #define MAP_5 200
 #define STOP 0
+Motors motors;
 int current_map = 0;
-
 void forward(int MAP);
 void reverse(int MAP);
 void stop();
 void test_all_motors();
 
+//Servo steering 
+#define L_SERVO_PIN 2
+#define R_SERVO_PIN 3
+Servo l_servo;
+Servo r_servo;
+
+void processCommand(char* msg);
+
 void setup() {
-  Serial.begin(9600);
-  pinMode(MOTOR_1_IN1, OUTPUT);
-  pinMode(MOTOR_1_IN2, OUTPUT);
-  pinMode(MOTOR_2_IN1, OUTPUT);
-  pinMode(MOTOR_2_IN2, OUTPUT);
-  pinMode(MOTOR_3_IN1, OUTPUT);
-  pinMode(MOTOR_3_IN2, OUTPUT);
-  pinMode(MOTOR_4_IN1, OUTPUT);
-  pinMode(MOTOR_4_IN2, OUTPUT);
-  Serial1.begin(2400);
-  forward(STOP);
+  Serial.begin(9600); //Debug serial
+  motors.start();
+  Serial1.begin(2400); //HC12 Serial
+  motors.stop();
+  motors.current_map = STOP;
+  l_servo.attach(L_SERVO_PIN);
+  r_servo.attach(R_SERVO_PIN);
 }
 
 char buffer[5];
 int index = 0;
 
 void loop() {
-
-  while (Serial1.available()) {
-
+  while (Serial1.available()){
     char c = Serial1.read();
-    if (c == '\n' || c == '\r' || c == ' '){
-      continue;
+
+    if (index == 0 && c != 'R' && c != 'L' &&
+        c != 'M' && c != 'F' && c != 'B' &&
+        c != 'S' && c != 'T' && c != 'K' && c != 'C'){
+          //Skip if no valid command header
+          continue;
     }
 
     buffer[index++] = c;
 
-    if (index == 5) {
-      //message complete
-      buffer[2] = '\0';
-      Serial.println(buffer);
-
-      char cmd = buffer[0];//option char
-      char arg_1 = buffer[1];
-      char arg_2 = buffer[2];
-      char arg_3 = buffer[3];
-
-      index = 0; //reset buffer
-
-      switch (cmd){
-        case 'M':
-          //Motor map config
-          Serial.print("Map config ");
-          Serial.println(arg_1);
-          switch (arg_1){
-            case '1' : current_map = MAP_1; break;
-            case '2' : current_map = MAP_2; break;
-            case '3' : current_map = MAP_3; break;
-            case '4' : current_map = MAP_4; break;
-            case '5' : current_map = MAP_5; break;
-            case '0' : current_map = STOP; break;
-          }
-          break;
-        case 'F':
-          Serial.println("Forward");
-          forward(current_map);
-          break;
-        case 'B':
-          Serial.println("Backwards");
-          reverse(current_map);
-          break;
-        case 'T':
-          Serial.println("Test all motors");
-          test_all_motors();
-          break;
-        case 'S':
-          Serial.println("Stop");
-          stop();
-          break;
-        case 'R':
-          Serial.print("Right servo: ");
-          Serial.print(arg_1);
-          Serial.print(arg_2);
-          Serial.println(arg_3);
-          break;
-        case 'L':
-          Serial.print("Left servo: ");
-          Serial.print(arg_1);
-          Serial.print(arg_2);
-          Serial.println(arg_3);
-          break;
+    if (index == 5){
+      //validate a compleye message
+      if (buffer[4] == '\n'){
+        Serial.print("Command received: ");
+        for (int i = 0; i < 5; i++) {
+          Serial.print(buffer[i]);
+        }
+        Serial.println();
+        
+        processCommand(buffer);
       }
+      index = 0;
     }
   }
-}
-
-void forward(int MAP){
-  digitalWrite(MOTOR_1_IN1, LOW);
-  analogWrite(MOTOR_1_IN2, MAP);
-
-  digitalWrite(MOTOR_2_IN1, LOW);
-  analogWrite(MOTOR_2_IN2, MAP);
-
-  digitalWrite(MOTOR_3_IN1, LOW);
-  analogWrite(MOTOR_3_IN2, MAP);
-
-  digitalWrite(MOTOR_4_IN1, LOW);
-  analogWrite(MOTOR_4_IN2, MAP);
-}
-
-void reverse(int MAP){
-  digitalWrite(MOTOR_1_IN2, LOW);
-  analogWrite(MOTOR_1_IN1, MAP);
-
-  digitalWrite(MOTOR_2_IN2, LOW);
-  analogWrite(MOTOR_2_IN1, MAP);
-
-  digitalWrite(MOTOR_3_IN2, LOW);
-  analogWrite(MOTOR_3_IN1, MAP);
-
-  digitalWrite(MOTOR_4_IN2, LOW);
-  analogWrite(MOTOR_4_IN1, MAP);
-}
-
-void stop(){
-  digitalWrite(MOTOR_1_IN1, LOW);
-  analogWrite(MOTOR_1_IN2, LOW);
-
-  digitalWrite(MOTOR_2_IN1, LOW);
-  analogWrite(MOTOR_2_IN2, LOW);
-
-  digitalWrite(MOTOR_3_IN1, LOW);
-  analogWrite(MOTOR_3_IN2, LOW);
-
-  digitalWrite(MOTOR_4_IN1, LOW);
-  analogWrite(MOTOR_4_IN2, LOW);
 
 }
 
+void processCommand(char* buffer){
+  char cmd = buffer[0];//option char
+  char arg_1 = buffer[1];
+  char arg_2 = buffer[2];
+  char arg_3 = buffer[3];
 
+  int val_1, val_2, val_3, angle {};
 
+  switch (cmd){
+    case 'M':
+      //Motor map config
+      Serial.print("Map config ");
+      Serial.println(arg_1);
+      switch (arg_1){
+        case '1' : motors.current_map = MAP_1; break;
+        case '2' : motors.current_map = MAP_2; break;
+        case '3' : motors.current_map = MAP_3; break;
+        case '4' : motors.current_map = MAP_4; break;
+        case '5' : motors.current_map = MAP_5; break;
+        case '0' : motors.current_map = STOP; break;
+      }
+      break;
 
-void test_all_motors(){
-  Serial.println("Forward  - MAP 1");
-  forward(MAP_1);
-  delay(2000);
-  Serial.println("Reverse - MAP 1");
-  reverse(MAP_1);
-  delay(2000);
+    case 'F':
+      Serial.println("Forward");
+      motors.forward(motors.current_map);
+      break;
 
-  Serial.println("Forward - MAP 2");
-  forward(MAP_2);
-  delay(2000);
-  Serial.println("Reverse - MAP 2");
-  reverse(MAP_2);
-  delay(2000);
+    case 'B':
+      Serial.println("Backwards");
+      motors.reverse(motors.current_map);
+      break;
 
-  Serial.println("Forward - MAP 3");
-  forward(MAP_3);
-  delay(2000);
-  Serial.println("Reverse - MAP 3");
-  reverse(MAP_3);
-  delay(2000);
+    case 'T':
+      Serial.println("Test all motors");
+      motors.test_all_motors();
+      break;
 
-  Serial.println("Forward - MAP 4");
-  forward(MAP_4);
-  delay(2000);
-  Serial.println("Reverse - MAP 4");
-  reverse(MAP_4);
-  delay(2000);
+    case 'S':
+      Serial.println("Stop");
+      motors.stop();
+      break;
+    
+    case 'R':
+      val_1 = arg_1 - '0';
+      val_2 = arg_2 - '0';
+      val_3 = arg_3 - '0';
+      angle = (val_1 * 100) + (val_2 * 10) + val_3;
+      Serial.print("R - Angle: ");
+      Serial.println(angle);
+      r_servo.write(angle);
+      break;
 
-  Serial.println("Forward - MAP 5");
-  forward(MAP_5);
-  delay(2000);
-  Serial.println("Reverse - MAP 5");
-  reverse(MAP_5);
-  delay(2000);
+    case 'L':
+      val_1 = arg_1 - '0';
+      val_2 = arg_2 - '0';
+      val_3 = arg_3 - '0';
+      angle = (val_1 * 100) + (val_2 * 10) + val_3;
+      Serial.print("L - Angle: ");
+      Serial.println(angle);
+      l_servo.write(angle);
+      break;
+
+    case 'K':
+      Serial.println("Toggle light");
+      break;
+
+    case 'C':
+      if (arg_1 == 'R'){
+        Serial.println("Cam right");
+      }
+      else if (arg_1 == 'L'){
+          Serial.println("Cam left");
+      }
+      break;
+  }
+
 }
