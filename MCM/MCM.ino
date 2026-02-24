@@ -27,6 +27,13 @@ void test_all_motors();
 Servo l_servo;
 Servo r_servo;
 
+//Servo camera
+#define CAM_SERVO_PIN 4
+Servo cam_servo;
+byte pos_servo_cam = 90;
+const byte MAX_POS_CAM = 180;
+const byte MIN_POS_CAM = 0;
+
 void processCommand(char* msg);
 
 void setup() {
@@ -37,6 +44,8 @@ void setup() {
   motors.current_map = STOP;
   l_servo.attach(L_SERVO_PIN);
   r_servo.attach(R_SERVO_PIN);
+  cam_servo.attach(CAM_SERVO_PIN);
+  cam_servo.write(pos_servo_cam);
 }
 
 char buffer[5];
@@ -63,7 +72,6 @@ void loop() {
           Serial.print(buffer[i]);
         }
         Serial.println();
-        
         processCommand(buffer);
       }
       index = 0;
@@ -141,10 +149,17 @@ void processCommand(char* buffer){
 
     case 'C':
       if (arg_1 == 'R'){
-        Serial.println("Cam right");
+        if (pos_servo_cam - 90 >= MIN_POS_CAM){
+          pos_servo_cam-=90;
+          cam_servo.write(pos_servo_cam);
+        }
       }
       else if (arg_1 == 'L'){
           Serial.println("Cam left");
+          if (pos_servo_cam + 90 <= MAX_POS_CAM){
+            pos_servo_cam+=90;
+            cam_servo.write(pos_servo_cam);
+          }
       }
       break;
   }
