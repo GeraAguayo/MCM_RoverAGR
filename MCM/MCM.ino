@@ -1,55 +1,52 @@
 /*
-Motion Control Module
-Rover AGR
+Motion Control Module - Rover AGR
 Gerardo Aguayo, 2025
 */
-#include <SoftwareSerial.h>
 #include <Servo.h>
 #include "Motors.h"
+// Pin 19 (RX1) <- TX del HC12
+// Pin 18 (TX1) -> RX del HC12
 
-//Motor maps
+// Motor maps
 #define MAP_1 70
 #define MAP_2 80
 #define MAP_3 100
 #define MAP_4 150
 #define MAP_5 200
 #define STOP 0
-Motors motors;
-int current_map = 0;
-void forward(int MAP);
-void reverse(int MAP);
-void stop();
-void test_all_motors();
 
-//Servo steering 
-#define L_SERVO_PIN 2
-#define R_SERVO_PIN 3
+Motors motors;
 Servo l_servo;
 Servo r_servo;
-
-//Servo camera
-#define CAM_SERVO_PIN 4
 Servo cam_servo;
+
+#define L_SERVO_PIN 2
+#define R_SERVO_PIN 3
+#define CAM_SERVO_PIN 4
+
 byte pos_servo_cam = 90;
 const byte MAX_POS_CAM = 180;
 const byte MIN_POS_CAM = 0;
 
-void processCommand(char* msg);
+char buffer[5];
+int index = 0;
 
 void setup() {
-  Serial.begin(9600); //Debug serial
+  Serial.begin(9600);   // Debug (Monitor Serie)
+  Serial1.begin(2400);  // HC12 en pines 18 y 19
+  
   motors.start();
-  Serial1.begin(2400); //HC12 Serial
   motors.stop();
   motors.current_map = STOP;
+  
   l_servo.attach(L_SERVO_PIN);
   r_servo.attach(R_SERVO_PIN);
   cam_servo.attach(CAM_SERVO_PIN);
   cam_servo.write(pos_servo_cam);
+  
+  Serial.println("MCM Ready");
 }
 
-char buffer[5];
-int index = 0;
 
 void loop() {
   while (Serial1.available()){
@@ -79,6 +76,7 @@ void loop() {
   }
 
 }
+
 
 void processCommand(char* buffer){
   char cmd = buffer[0];//option char
